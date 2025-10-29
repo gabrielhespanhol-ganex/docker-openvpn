@@ -70,9 +70,9 @@ add-client:
 	echo  -n "Send zip file with credentials to email? [y/N] " && read SEND_EMAIL; \
 	if [[ $$SEND_EMAIL =~ ^[Yy]$$ ]]; then \
 		read -p "Email address: " EMAIL; \
-		if [[ -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
+		if [[ ! -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
 		python3 send-email.py $${SMTP_HOST} $${SMTP_PORT} $${SMTP_USER} $${SMTP_PASSWORD} $${SMTP_TLS_ENABLED} $${USERNAME} $${EMAIL_FROM} $${EMAIL} 2> /dev/null; \
-		if [[ $$? -eq 0 ]]; then \
+		if [[ $? -eq 0 ]]; then \
 			echo "Email was sent successfully!" ;\
 		else \
 			echo "There was a problem sending the email, check your smtp settings." ;\
@@ -109,9 +109,9 @@ list-clients:
 send-credential:
 	@read -p "Username: " USERNAME; \
 	read -p "Email address: " EMAIL; \
-	if [[ -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
+	if [[ ! -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
 	python3 send-email.py $${SMTP_HOST} $${SMTP_PORT} $${SMTP_USER} $${SMTP_PASSWORD} $${SMTP_TLS_ENABLED} $${USERNAME} $${EMAIL_FROM} $${EMAIL}; \
-	if [[ $$? -eq 0 ]]; then \
+	if [[ $? -eq 0 ]]; then \
 		echo "Email was sent successfully!" ;\
 	else \
 		echo "There was a problem sending the email, check your smtp settings." ;\
