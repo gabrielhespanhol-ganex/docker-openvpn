@@ -4,11 +4,12 @@ set -Eeuo pipefail
 readonly OPENVPN_DIR=/etc/openvpn
 readonly EASYRSA_PKI=/etc/openvpn/pki
 readonly CLIENT_DIR=/etc/openvpn/clients
-readonly CA_CN='Ganex OpenVPN DCO CA'
-readonly CA_CERT_DAYS=7300
-readonly SERVER_CERT_DAYS=3650
-readonly CLIENT_CERT_DAYS=3650
-readonly CRL_DAYS=3650
+
+CA_CN="${CA_CN:-Ganex OpenVPN DCO CA}"
+CA_CERT_DAYS="${CA_CERT_DAYS:-7300}"
+SERVER_CERT_DAYS="${SERVER_CERT_DAYS:-3650}"
+CLIENT_CERT_DAYS="${CLIENT_CERT_DAYS:-3650}"
+CRL_DAYS="${CRL_DAYS:-3650}"
 
 VPN_PORT="${VPN_PORT:-1194}"
 VPN_INTERFACE="${VPN_INTERFACE:-ovpn0}"
@@ -18,7 +19,7 @@ VPN_DNS_1="${VPN_DNS_1:-1.1.1.1}"
 VPN_DNS_2="${VPN_DNS_2:-1.0.0.1}"
 VPN_TUN_MTU="${VPN_TUN_MTU:-1400}"
 MAX_CLIENTS="${MAX_CLIENTS:-25}"
-SERVER_CN="${VPN_ENDPOINT:-}"
+SERVER_CN="${SERVER_CN:-${VPN_ENDPOINT:-}}"
 
 export EASYRSA_PKI VPN_PORT VPN_INTERFACE VPN_SUBNET VPN_NETMASK
 export VPN_DNS_1 VPN_DNS_2 VPN_TUN_MTU MAX_CLIENTS SERVER_CN
@@ -48,6 +49,14 @@ valid_endpoint() {
     }
 }
 
+valid_positive_integer() {
+    local name="$1" value="${!1:-}"
+    [[ "$value" =~ ^[1-9][0-9]*$ ]] || {
+        echo "$name deve ser um numero inteiro positivo: ${value:-vazio}" >&2
+        exit 1
+    }
+}
+
 run_easyrsa() {
     local log_file
     log_file="$(mktemp)"
@@ -61,20 +70,25 @@ run_easyrsa() {
 
 certificate_summary() {
     local label="$1" cn="$2" cert="$3" days="$4"
-    local created expires
+    local created expires period_suffix=''
     created="$(openssl x509 -in "$cert" -noout -startdate | cut -d= -f2-)"
     expires="$(openssl x509 -in "$cert" -noout -enddate | cut -d= -f2-)"
+    [[ "$days" == 3650 ]] && period_suffix=' (10 anos)'
     printf '\n%s criado sem senha.\n' "$label"
     printf 'CN: %s\n' "$cn"
     printf 'Emitido em: %s\n' "$created"
     printf 'Expira em: %s\n' "$expires"
-    printf 'Validade configurada: %s dias (10 anos)\n' "$days"
+    printf 'Validade configurada: %s dias%s\n' "$days" "$period_suffix"
 }
 
 render() {
     required VPN_ENDPOINT VPN_PORT VPN_INTERFACE VPN_SUBNET VPN_NETMASK VPN_DNS_1 VPN_DNS_2 VPN_TUN_MTU MAX_CLIENTS SERVER_CN
     valid_endpoint "$VPN_ENDPOINT"
+    valid_endpoint "$SERVER_CN"
     valid_name "$VPN_INTERFACE"
+    valid_positive_integer VPN_PORT
+    valid_positive_integer VPN_TUN_MTU
+    valid_positive_integer MAX_CLIENTS
     sed \
         -e "s|@VPN_PORT@|$VPN_PORT|g" \
         -e "s|@VPN_INTERFACE@|$VPN_INTERFACE|g" \
@@ -91,8 +105,12 @@ render() {
 }
 
 init_pki() {
-    required VPN_ENDPOINT SERVER_CN
+    required VPN_ENDPOINT SERVER_CN CA_CN CA_CERT_DAYS SERVER_CERT_DAYS CRL_DAYS
     valid_endpoint "$VPN_ENDPOINT"
+    valid_endpoint "$SERVER_CN"
+    valid_positive_integer CA_CERT_DAYS
+    valid_positive_integer SERVER_CERT_DAYS
+    valid_positive_integer CRL_DAYS
     [[ ! -e "$EASYRSA_PKI/ca.crt" ]] || {
         echo "A PKI ja existe; a inicializacao nao sera repetida." >&2
         exit 1
@@ -136,7 +154,9 @@ create_client() {
     local name="${1:-}" temp_cert
     required VPN_ENDPOINT VPN_PORT SERVER_CN VPN_TUN_MTU
     valid_endpoint "$VPN_ENDPOINT"
+    valid_endpoint "$SERVER_CN"
     valid_name "$name"
+    valid_positive_integer CLIENT_CERT_DAYS
     [[ -f "$EASYRSA_PKI/ca.crt" ]] || {
         echo "PKI nao inicializada." >&2
         exit 1
