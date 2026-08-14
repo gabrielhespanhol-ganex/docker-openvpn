@@ -5,7 +5,7 @@ readonly OPENVPN_DIR=/etc/openvpn
 readonly EASYRSA_PKI=/etc/openvpn/pki
 readonly CLIENT_DIR=/etc/openvpn/clients
 
-CA_CN="${CA_CN:-Ganex OpenVPN DCO CA}"
+CA_CN="${CA_CN:-${VPN_ENDPOINT:-}}"
 CA_CERT_DAYS="${CA_CERT_DAYS:-7300}"
 SERVER_CERT_DAYS="${SERVER_CERT_DAYS:-3650}"
 CLIENT_CERT_DAYS="${CLIENT_CERT_DAYS:-3650}"

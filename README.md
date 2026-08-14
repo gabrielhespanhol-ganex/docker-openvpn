@@ -110,7 +110,7 @@ VPN_DNS_1=1.1.1.1
 VPN_DNS_2=1.0.0.1
 
 # PKI
-CA_CN=Ganex OpenVPN DCO CA
+CA_CN=${VPN_ENDPOINT}
 SERVER_CN=${VPN_ENDPOINT}
 CA_CERT_DAYS=7300
 SERVER_CERT_DAYS=3650
@@ -122,7 +122,7 @@ O valor deve ser somente o dominio, sem `https://`, porta ou caminho. O DNS deve
 
 Por padrao:
 
-- CN da CA: `Ganex OpenVPN DCO CA`;
+- CN da CA: acompanha `VPN_ENDPOINT` por meio de `CA_CN=${VPN_ENDPOINT}`;
 - CN do servidor: acompanha automaticamente `VPN_ENDPOINT` por meio de `SERVER_CN=${VPN_ENDPOINT}`;
 - CN do cliente: o username informado em `make add-client`;
 - rede VPN: `10.8.0.0/24`;
