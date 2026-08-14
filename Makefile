@@ -9,8 +9,8 @@ export
 endif
 
 OPENVPN_IMAGE ?= ganexcloud/openvpn-dco:2.7.5
-VPN_INTERFACE := ovpn0
-VPN_CIDR := 10.8.0.0/24
+VPN_INTERFACE ?= ovpn0
+VPN_CIDR ?= 10.8.0.0/24
 COMPOSE := docker compose --env-file .env
 
 export OPENVPN_IMAGE
@@ -108,6 +108,7 @@ check-env:
 	@if [[ ! -f .env ]]; then echo "Arquivo .env ausente. Copie .env.example para .env."; exit 1; fi
 	@if [[ -z "$(VPN_ENDPOINT)" ]]; then echo "Defina VPN_ENDPOINT no arquivo .env."; exit 1; fi
 	@if [[ ! "$(VPN_ENDPOINT)" =~ ^[A-Za-z0-9][A-Za-z0-9.-]{0,251}[A-Za-z0-9]$$ ]]; then echo "VPN_ENDPOINT invalido: $(VPN_ENDPOINT)"; exit 1; fi
+	@if [[ -z "$(OPENVPN_IMAGE)" || -z "$(VPN_INTERFACE)" || -z "$(VPN_CIDR)" ]]; then echo "OPENVPN_IMAGE, VPN_INTERFACE e VPN_CIDR nao podem ficar vazios."; exit 1; fi
 
 check-docker:
 	@command -v docker >/dev/null 2>&1 || { echo "Docker nao instalado. Execute primeiro o setup.sh."; exit 1; }

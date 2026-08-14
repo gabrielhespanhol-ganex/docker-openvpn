@@ -85,18 +85,45 @@ Edite o `.env`:
 vi .env
 ```
 
-A unica configuracao obrigatoria e o dominio publico da VPN:
+A unica configuracao que obrigatoriamente precisa ser revisada em cada implantacao e o dominio publico da VPN. As demais opcoes ja possuem valores padrao, mas continuam disponiveis para customizacao:
 
 ```dotenv
+# Obrigatorio
 VPN_ENDPOINT=vpn.ganex.com.br
+
+# Imagem
+OPENVPN_IMAGE=ganexcloud/openvpn-dco:2.7.5
+
+# Servico
+VPN_PORT=1194
+VPN_INTERFACE=ovpn0
+VPN_TUN_MTU=1400
+MAX_CLIENTS=25
+
+# Rede IPv4
+VPN_SUBNET=10.8.0.0
+VPN_NETMASK=255.255.255.0
+VPN_CIDR=10.8.0.0/24
+
+# DNS do full tunnel
+VPN_DNS_1=1.1.1.1
+VPN_DNS_2=1.0.0.1
+
+# PKI
+CA_CN=Ganex OpenVPN DCO CA
+SERVER_CN=${VPN_ENDPOINT}
+CA_CERT_DAYS=7300
+SERVER_CERT_DAYS=3650
+CLIENT_CERT_DAYS=3650
+CRL_DAYS=3650
 ```
 
 O valor deve ser somente o dominio, sem `https://`, porta ou caminho. O DNS deve apontar para o Elastic IP da EC2.
 
-Os demais valores sao definidos pela implementacao:
+Por padrao:
 
 - CN da CA: `Ganex OpenVPN DCO CA`;
-- CN do servidor: o valor de `VPN_ENDPOINT`;
+- CN do servidor: acompanha automaticamente `VPN_ENDPOINT` por meio de `SERVER_CN=${VPN_ENDPOINT}`;
 - CN do cliente: o username informado em `make add-client`;
 - rede VPN: `10.8.0.0/24`;
 - DNS dos clientes: `1.1.1.1` e `1.0.0.1`;
@@ -104,7 +131,7 @@ Os demais valores sao definidos pela implementacao:
 - MTU: `1400`;
 - limite inicial: 25 clientes.
 
-Se for necessario utilizar outra imagem publicada, descomente `OPENVPN_IMAGE` no `.env`.
+Ao alterar a rede, mantenha `VPN_SUBNET`, `VPN_NETMASK` e `VPN_CIDR` representando a mesma faixa. `VPN_CIDR` e utilizado pelo firewall do host, enquanto subnet e netmask sao utilizados pelo OpenVPN.
 
 ## Inicializacao
 
@@ -124,8 +151,7 @@ O comando:
 - gera a configuracao do OpenVPN;
 - informa CN, data de emissao, expiracao e validade do certificado.
 
-O certificado do servidor possui validade configurada de 3650 dias, equivalente a dez anos.
-A CA possui validade de 7300 dias para nao encerrar a cadeia antes do certificado do servidor e dos clientes.
+Por padrao, o certificado do servidor e dos clientes possui validade de 3650 dias, equivalente a dez anos. A CA possui validade de 7300 dias para nao encerrar a cadeia antes desses certificados. Esses prazos podem ser alterados no `.env`.
 
 O `make init` e destinado a primeira inicializacao e recusa substituir uma PKI existente.
 
