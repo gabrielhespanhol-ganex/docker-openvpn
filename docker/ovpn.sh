@@ -81,6 +81,14 @@ certificate_summary() {
     printf 'Validade configurada: %s dias%s\n' "$days" "$period_suffix"
 }
 
+validate_server_certificate() {
+    local cert="$EASYRSA_PKI/issued/$SERVER_CN.crt"
+    openssl x509 -in "$cert" -noout -checkhost "$SERVER_CN" >/dev/null 2>&1 || {
+        echo "Certificado do servidor nao corresponde ao dominio $SERVER_CN." >&2
+        exit 1
+    }
+}
+
 render() {
     required VPN_ENDPOINT VPN_PORT VPN_INTERFACE VPN_SUBNET VPN_NETMASK VPN_DNS_1 VPN_DNS_2 VPN_TUN_MTU MAX_CLIENTS SERVER_CN
     valid_endpoint "$VPN_ENDPOINT"
@@ -133,7 +141,8 @@ init_pki() {
     run_easyrsa init-pki
     chmod 0755 "$EASYRSA_PKI"
     run_easyrsa build-ca nopass
-    run_easyrsa build-server-full "$SERVER_CN" nopass
+    unset EASYRSA_REQ_CN
+    run_easyrsa --san="DNS:$SERVER_CN" build-server-full "$SERVER_CN" nopass
     run_easyrsa gen-crl
     openvpn --genkey tls-crypt "$EASYRSA_PKI/tls-crypt.key"
 
@@ -145,6 +154,7 @@ init_pki() {
         "$EASYRSA_PKI/issued/$SERVER_CN.crt" \
         "$EASYRSA_PKI/crl.pem"
 
+    validate_server_certificate
     render
     certificate_summary "Certificado do servidor" "$SERVER_CN" \
         "$EASYRSA_PKI/issued/$SERVER_CN.crt" "$SERVER_CERT_DAYS"
@@ -266,6 +276,7 @@ run_server() {
             exit 1
         }
     done
+    validate_server_certificate
     grep -Eiq '^[[:space:]]*(compress|comp-lzo|fragment|disable-dco)([[:space:]]|$)' "$OPENVPN_DIR/openvpn.conf" \
         && { echo "Configuracao incompativel com DCO." >&2; exit 1; }
     exec openvpn --config "$OPENVPN_DIR/openvpn.conf"

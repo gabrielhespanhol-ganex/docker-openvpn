@@ -151,7 +151,7 @@ O comando:
 - gera a configuracao do OpenVPN;
 - informa CN, data de emissao, expiracao e validade do certificado.
 
-Por padrao, o certificado do servidor e dos clientes possui validade de 3650 dias, equivalente a dez anos. A CA possui validade de 7300 dias para nao encerrar a cadeia antes desses certificados. Esses prazos podem ser alterados no `.env`.
+Por padrao, os certificados do servidor e dos clientes possuem validade de 3650 dias, equivalente a dez anos. O certificado do servidor inclui o dominio em `subjectAltName` (SAN). A CA possui validade de 7300 dias para nao encerrar a cadeia antes desses certificados. Esses prazos podem ser alterados no `.env`.
 
 O `make init` e destinado a primeira inicializacao e recusa substituir uma PKI existente.
 
