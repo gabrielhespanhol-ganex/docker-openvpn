@@ -1,0 +1,40 @@
+name: openvpn-dco
+
+services:
+  openvpn:
+    image: "${OPENVPN_IMAGE:-ganexcloud/openvpn-dco:2.7.5}"
+    pull_policy: missing
+    container_name: openvpn-dco
+    env_file:
+      - "${OPENVPN_ENV_FILE:-.env}"
+    network_mode: host
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_ADMIN
+      - SETPCAP
+      - SETGID
+      - SETUID
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run/openvpn:rw,noexec,nosuid,nodev,size=16m,mode=0770,uid=0,gid=65534
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    volumes:
+      - ./openvpn-data/conf:/etc/openvpn:z
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1 && ip link show ovpn0 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

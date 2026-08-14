@@ -1,0 +1,39 @@
+# OpenVPN 2.7 / Linux DCO - servidor full tunnel IPv4
+port @VPN_PORT@
+proto udp4
+dev-type tun
+dev @VPN_INTERFACE@
+
+topology subnet
+server @VPN_SUBNET@ @VPN_NETMASK@
+max-clients @MAX_CLIENTS@
+
+push "redirect-gateway def1"
+push "dhcp-option DNS @VPN_DNS_1@"
+push "dhcp-option DNS @VPN_DNS_2@"
+
+ca /etc/openvpn/pki/ca.crt
+cert /etc/openvpn/pki/issued/@SERVER_CN@.crt
+key /etc/openvpn/pki/private/@SERVER_CN@.key
+crl-verify /etc/openvpn/pki/crl.pem
+dh none
+remote-cert-tls client
+tls-crypt /etc/openvpn/pki/tls-crypt.key
+tls-version-min 1.2
+tls-groups X25519:prime256v1
+
+data-ciphers AES-128-GCM:AES-256-GCM:?CHACHA20-POLY1305
+allow-compression no
+tun-mtu @VPN_TUN_MTU@
+
+keepalive 10 60
+explicit-exit-notify 1
+persist-key
+persist-tun
+ifconfig-pool-persist /run/openvpn/ipp.txt
+status /run/openvpn/status.log 30
+status-version 3
+verb 3
+
+user nobody
+group nobody

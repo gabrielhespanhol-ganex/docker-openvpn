@@ -1,191 +1,256 @@
-# OpenVPN for Docker
+# OpenVPN 2.7 com DCO em Docker
 
-[![Docker Stars](https://img.shields.io/docker/stars/ganex/openvpn.svg)](https://hub.docker.com/r/ganex/openvpn/)
-[![Docker Pulls](https://img.shields.io/docker/pulls/ganex/openvpn.svg)](https://hub.docker.com/r/ganex/openvpn/)
+Implementacao de OpenVPN full tunnel IPv4 para Amazon Linux 2023. O host utiliza o modulo `ovpn` e executa um unico container com OpenVPN 2.7.5 e DCO.
 
-OpenVPN server in a Docker container complete with an EasyRSA PKI CA.
+O servidor nao realiza build local. A imagem pronta e baixada do Docker Hub durante o `make init`.
 
-#### Upstream Links
+## Componentes
 
-* Docker Registry @ [ganex/openvpn](https://hub.docker.com/r/ganex/openvpn/)
-* GitHub @ [ganex/docker-openvpn](https://github.com/ganex/docker-openvpn)
+- Amazon Linux 2023 com kernel 6.18;
+- modulo `ovpn` oficial ou `OpenVPN/ovpn-backports`;
+- Docker Engine e Docker Compose;
+- imagem `ganexcloud/openvpn-dco:2.7.5`;
+- Alpine Linux 3.24.1;
+- OpenVPN 2.7.5;
+- Easy-RSA 3.2.5;
+- UDP/1194;
+- full tunnel exclusivamente IPv4;
+- PKI, configuracao e clientes persistidos no host.
 
-## Quick Start
+## Requisitos da EC2
 
-* Pick a name for the `$OVPN_DATA` data volume container. It's recommended to
-  use the `ovpn-data-` prefix to operate seamlessly with the reference systemd
-  service.  Users are encourage to replace `example` with a descriptive name of
-  their choosing.
+- Amazon Linux 2023;
+- arquitetura `x86_64` ou `aarch64`;
+- Elastic IP associado a EC2;
+- registro DNS apontando para o Elastic IP;
+- subnet publica com rota para um Internet Gateway;
+- Security Group permitindo entrada UDP/1194;
+- acesso SSH ou SSM;
+- acesso de saida ao GitHub, aos repositorios do Amazon Linux e ao Docker Hub.
 
-      OVPN_DATA="ovpn-data-example"
+O Source/Destination Check pode permanecer habilitado porque a saida dos clientes utiliza NAT/MASQUERADE.
 
-* Initialize the `$OVPN_DATA` container that will hold the configuration files
-  and certificates.  The container will prompt for a passphrase to protect the
-  private key used by the newly generated certificate authority.
+## Instalacao do host
 
-      docker volume create --name $OVPN_DATA
-      docker run -v $OVPN_DATA:/etc/openvpn --rm ganex/openvpn ovpn_genconfig -u udp://VPN.SERVERNAME.COM
-      docker run -v $OVPN_DATA:/etc/openvpn --rm -it ganex/openvpn ovpn_initpki
+Baixe somente o instalador:
 
-* Start OpenVPN server process
+```bash
+curl -fsSLo setup.sh \
+  https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/setup.sh
+sudo bash setup.sh
+```
 
-      docker run -v $OVPN_DATA:/etc/openvpn -d -p 1194:1194/udp --cap-add=NET_ADMIN ganex/openvpn
+O `setup.sh`:
 
-* Generate a client certificate without a passphrase
+1. valida o Amazon Linux 2023;
+2. instala Docker, Compose, kernel e dependencias de compilacao;
+3. instala ou compila o modulo `ovpn` oficial;
+4. habilita o encaminhamento IPv4;
+5. cria `/opt/openvpn-dco`;
+6. baixa `Makefile`, `compose.yaml` e `.env.example`;
+7. cria o `.env` inicial sem sobrescrever configuracoes existentes;
+8. instala o servico persistente de firewall.
 
-      docker run -v $OVPN_DATA:/etc/openvpn --rm -it ganex/openvpn easyrsa build-client-full CLIENTNAME nopass
+O script nao instala Docker Buildx porque nenhum build e realizado no servidor.
 
-* Retrieve the client configuration with embedded certificates
+### Reinicializacao do kernel
 
-      docker run -v $OVPN_DATA:/etc/openvpn --rm ganex/openvpn ovpn_getclient CLIENTNAME > CLIENTNAME.ovpn
+Quando um novo kernel for instalado, o script encerrara solicitando reinicializacao:
 
-## Next Steps
+```bash
+sudo reboot
+```
 
-### More Reading
+Depois de reconectar, execute novamente o mesmo instalador:
 
-Miscellaneous write-ups for advanced configurations are available in the
-[docs](docs) folder.
+```bash
+sudo /opt/openvpn-dco/setup.sh
+```
 
-### Docker Compose
+O processo e idempotente. O segundo ciclo compila o `ovpn-backports` somente se o modulo nao estiver disponivel no kernel.
 
-If you prefer to use `docker-compose` please refer to the [documentation](docs/docker-compose.md).
+Quando o instalador for executado com `sudo` por um usuario comum, reabra a sessao antes de utilizar o Docker para que a associacao ao grupo `docker` seja aplicada.
 
-## Debugging Tips
+## Configuracao
 
-* Create an environment variable with the name DEBUG and value of 1 to enable debug output (using "docker -e").
+Entre no diretorio da aplicacao:
 
-        docker run -v $OVPN_DATA:/etc/openvpn -p 1194:1194/udp --cap-add=NET_ADMIN -e DEBUG=1 ganex/openvpn
+```bash
+cd /opt/openvpn-dco
+```
 
-* Test using a client that has openvpn installed correctly
+Edite o `.env`:
 
-        $ openvpn --config CLIENTNAME.ovpn
+```bash
+vi .env
+```
 
-* Run through a barrage of debugging checks on the client if things don't just work
+A unica configuracao obrigatoria e o dominio publico da VPN:
 
-        $ ping 8.8.8.8    # checks connectivity without touching name resolution
-        $ dig google.com  # won't use the search directives in resolv.conf
-        $ nslookup google.com # will use search
+```dotenv
+VPN_ENDPOINT=vpn.ganex.com.br
+```
 
-* Consider setting up a [systemd service](/docs/systemd.md) for automatic
-  start-up at boot time and restart in the event the OpenVPN daemon or Docker
-  crashes.
+O valor deve ser somente o dominio, sem `https://`, porta ou caminho. O DNS deve apontar para o Elastic IP da EC2.
 
-## How Does It Work?
+Os demais valores sao definidos pela implementacao:
 
-Initialize the volume container using the `ganex/openvpn` image with the
-included scripts to automatically generate:
+- CN da CA: `Ganex OpenVPN DCO CA`;
+- CN do servidor: o valor de `VPN_ENDPOINT`;
+- CN do cliente: o username informado em `make add-client`;
+- rede VPN: `10.8.0.0/24`;
+- DNS dos clientes: `1.1.1.1` e `1.0.0.1`;
+- interface DCO: `ovpn0`;
+- MTU: `1400`;
+- limite inicial: 25 clientes.
 
-- Diffie-Hellman parameters
-- a private key
-- a self-certificate matching the private key for the OpenVPN server
-- an EasyRSA CA key and certificate
-- a TLS auth key from HMAC security
+Se for necessario utilizar outra imagem publicada, descomente `OPENVPN_IMAGE` no `.env`.
 
-The OpenVPN server is started with the default run cmd of `ovpn_run`
+## Inicializacao
 
-The configuration is located in `/etc/openvpn`, and the Dockerfile
-declares that directory as a volume. It means that you can start another
-container with the `-v` argument, and access the configuration.
-The volume also holds the PKI keys and certs so that it could be backed up.
+### 1. Criar configuracao e certificados
 
-To generate a client certificate, `ganex/openvpn` uses EasyRSA via the
-`easyrsa` command in the container's path.  The `EASYRSA_*` environmental
-variables place the PKI CA under `/etc/openvpn/pki`.
+```bash
+make init
+```
 
-Conveniently, `ganex/openvpn` comes with a script called `ovpn_getclient`,
-which dumps an inline OpenVPN client configuration file.  This single file can
-then be given to a client for access to the VPN.
+O comando:
 
-To enable Two Factor Authentication for clients (a.k.a. OTP) see [this document](/docs/otp.md).
+- valida o `.env` e o Docker;
+- executa o pull da imagem publicada;
+- cria a CA sem senha;
+- cria o certificado e a chave do servidor sem senha;
+- cria a CRL e a chave `tls-crypt`;
+- gera a configuracao do OpenVPN;
+- informa CN, data de emissao, expiracao e validade do certificado.
 
-## OpenVPN Details
+O certificado do servidor possui validade configurada de 3650 dias, equivalente a dez anos.
+A CA possui validade de 7300 dias para nao encerrar a cadeia antes do certificado do servidor e dos clientes.
 
-We use `tun` mode, because it works on the widest range of devices.
-`tap` mode, for instance, does not work on Android, except if the device
-is rooted.
+O `make init` e destinado a primeira inicializacao e recusa substituir uma PKI existente.
 
-The topology used is `net30`, because it works on the widest range of OS.
-`p2p`, for instance, does not work on Windows.
+### 2. Iniciar o servidor
 
-The UDP server uses`192.168.255.0/24` for dynamic clients by default.
+```bash
+make start
+```
 
-The client profile specifies `redirect-gateway def1`, meaning that after
-establishing the VPN connection, all traffic will go through the VPN.
-This might cause problems if you use local DNS recursors which are not
-directly reachable, since you will try to reach them through the VPN
-and they might not answer to you. If that happens, use public DNS
-resolvers like those of Google (8.8.4.4 and 8.8.8.8) or OpenDNS
-(208.67.222.222 and 208.67.220.220).
+O comando aplica o encaminhamento e o NAT, carrega o modulo `ovpn`, inicia o container sem build local e confirma nos logs que o DCO foi ativado.
 
+### 3. Criar um cliente
 
-## Security Discussion
+```bash
+make add-client
+```
 
-The Docker container runs its own EasyRSA PKI Certificate Authority.  This was
-chosen as a good way to compromise on security and convenience.  The container
-runs under the assumption that the OpenVPN container is running on a secure
-host, that is to say that an adversary does not have access to the PKI files
-under `/etc/openvpn/pki`.  This is a fairly reasonable compromise because if an
-adversary had access to these files, the adversary could manipulate the
-function of the OpenVPN server itself (sniff packets, create a new PKI CA, MITM
-packets, etc).
+Informe somente o username:
 
-* The certificate authority key is kept in the container by default for
-  simplicity.  It's highly recommended to secure the CA key with some
-  passphrase to protect against a filesystem compromise.  A more secure system
-  would put the EasyRSA PKI CA on an offline system (can use the same Docker
-  image and the script [`ovpn_copy_server_files`](/docs/paranoid.md) to accomplish this).
-* It would be impossible for an adversary to sign bad or forged certificates
-  without first cracking the key's passphase should the adversary have root
-  access to the filesystem.
-* The EasyRSA `build-client-full` command will generate and leave keys on the
-  server, again possible to compromise and steal the keys.  The keys generated
-  need to be signed by the CA which the user hopefully configured with a passphrase
-  as described above.
-* Assuming the rest of the Docker container's filesystem is secure, TLS + PKI
-  security should prevent any malicious host from using the VPN.
+```text
+Username: usuario.ganex
+```
 
+O cliente e criado sem senha e com validade de 3650 dias. Ao final, o comando informa a data de emissao, a data de expiracao e o caminho do perfil:
 
-## Benefits of Running Inside a Docker Container
+```text
+download-configs/usuario.ganex.ovpn
+```
 
-### The Entire Daemon and Dependencies are in the Docker Image
+## Comandos operacionais
 
-This means that it will function correctly (after Docker itself is setup) on
-all distributions Linux distributions such as: Ubuntu, Arch, Debian, Fedora,
-etc.  Furthermore, an old stable server can run a bleeding edge OpenVPN server
-without having to install/muck with library dependencies (i.e. run latest
-OpenVPN with latest OpenSSL on Ubuntu 12.04 LTS).
+```bash
+make start
+make stop
+make restart
+make status
+make logs
+make add-client
+make list-clients
+make revoke-client
+make remove-client
+make help
+```
 
-### It Doesn't Stomp All Over the Server's Filesystem
+### Revogacao
 
-Everything for the Docker container is contained in two images: the ephemeral
-run time image (ganex/openvpn) and the `$OVPN_DATA` data volume. To remove
-it, remove the corresponding containers, `$OVPN_DATA` data volume and Docker
-image and it's completely removed.  This also makes it easier to run multiple
-servers since each lives in the bubble of the container (of course multiple IPs
-or separate ports are needed to communicate with the world).
+Revogar o certificado mantendo os arquivos locais:
 
-### Some (arguable) Security Benefits
+```bash
+make revoke-client
+```
 
-At the simplest level compromising the container may prevent additional
-compromise of the server.  There are many arguments surrounding this, but the
-take away is that it certainly makes it more difficult to break out of the
-container.  People are actively working on Linux containers to make this more
-of a guarantee in the future.
+Revogar o certificado e remover os arquivos do cliente:
 
-## Differences from jpetazzo/dockvpn
+```bash
+make remove-client
+```
 
-* No longer uses serveconfig to distribute the configuration via https
-* Proper PKI support integrated into image
-* OpenVPN config files, PKI keys and certs are stored on a storage
-  volume for re-use across containers
-* Addition of tls-auth for HMAC security
+## Persistencia
 
-## Originally Tested On
+Os dados ficam no host:
 
-* Docker hosts:
-  * server a [Digital Ocean](https://www.digitalocean.com/?refcode=d19f7fe88c94) Droplet with 512 MB RAM running Ubuntu 14.04
-* Clients
-  * Android App OpenVPN Connect 1.1.14 (built 56)
-     * OpenVPN core 3.0 android armv7a thumb2 32-bit
-  * OS X Mavericks with Tunnelblick 3.4beta26 (build 3828) using openvpn-2.3.4
-  * ArchLinux OpenVPN pkg 2.3.4-1
+```text
+/opt/openvpn-dco/openvpn-data/conf/openvpn.conf
+/opt/openvpn-dco/openvpn-data/conf/pki/
+/opt/openvpn-dco/openvpn-data/conf/clients/
+/opt/openvpn-dco/download-configs/
+```
+
+O volume `openvpn-data/conf` e montado como `/etc/openvpn` dentro do container. Certificados, chaves, CRL e perfis permanecem no mesmo container e estrutura persistente da implementacao.
+
+## Imagem Docker
+
+A imagem padrao e:
+
+```text
+ganexcloud/openvpn-dco:2.7.5
+```
+
+O `Dockerfile`, o template do servidor e o entrypoint permanecem no repositorio para a construcao externa da imagem. O servidor de VPN recebe somente os arquivos de runtime e executa `docker compose pull`.
+
+Para trocar permanentemente o repositorio ou a tag, configure no `.env`:
+
+```dotenv
+OPENVPN_IMAGE=ganexcloud/openvpn-dco:2.7.5
+```
+
+Antes da primeira inicializacao, o novo valor sera usado automaticamente pelo `make init`. Em uma instalacao ja inicializada, atualize sem recriar a PKI:
+
+```bash
+docker compose --env-file .env pull openvpn
+make restart
+```
+
+## Atualizacao do kernel
+
+O modulo `ovpn` e vinculado ao kernel em execucao. Depois de uma atualizacao de kernel, execute novamente:
+
+```bash
+sudo /opt/openvpn-dco/setup.sh
+```
+
+Se solicitado, reinicie e repita o comando. O instalador recompilara o `ovpn-backports` para o kernel em uso.
+
+## Verificacoes rapidas
+
+```bash
+uname -r
+modinfo ovpn
+lsmod | grep '^ovpn'
+docker compose version
+cd /opt/openvpn-dco && make status
+```
+
+Nos logs do servidor devem aparecer mensagens equivalentes a:
+
+```text
+DCO device ovpn0 opened
+Initialization Sequence Completed
+```
+
+## Observacoes
+
+- A VPN utiliza somente IPv4 (`udp4`) e nao distribui rotas ou enderecos IPv6.
+- O full tunnel e aplicado por `redirect-gateway def1`.
+- Compressao, `fragment`, cifras legadas ou `disable-dco` nao devem ser adicionados.
+- A porta UDP/1194 precisa estar liberada no Security Group.
+- A chave da CA nao possui senha para permitir a operacao automatizada solicitada; proteja o diretorio `openvpn-data` e seus backups.
