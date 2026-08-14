@@ -138,20 +138,25 @@ configure_host() {
 }
 
 download_runtime_files() {
-    local file temp_dir install_user install_group
+    local file file_url temp_dir install_user install_group current_setup
     temp_dir="$(mktemp -d)"
     install -d -m 0755 "$INSTALL_DIR"
 
-    for file in setup.sh Makefile compose.yaml .env.example; do
-        if [[ "$file" == setup.sh && "$(readlink -f "$0")" == "$INSTALL_DIR/setup.sh" ]]; then
-            continue
+    current_setup="$(readlink -f "$0")"
+    if [[ "$current_setup" != "$INSTALL_DIR/setup.sh" ]]; then
+        install -m 0755 "$current_setup" "$INSTALL_DIR/setup.sh"
+    fi
+
+    for file in Makefile compose.yaml .env.example; do
+        file_url="$REPOSITORY_RAW_URL/$file"
+        if ! curl -fsSL "$file_url" -o "$temp_dir/$file"; then
+            echo "Falha ao baixar $file." >&2
+            echo "URL: $file_url" >&2
+            echo "Confirme se os arquivos de runtime foram publicados no GitHub." >&2
+            rm -rf "$temp_dir"
+            exit 1
         fi
-        curl -fsSL "$REPOSITORY_RAW_URL/$file" -o "$temp_dir/$file"
-        if [[ "$file" == setup.sh ]]; then
-            install -m 0755 "$temp_dir/$file" "$INSTALL_DIR/$file"
-        else
-            install -m 0644 "$temp_dir/$file" "$INSTALL_DIR/$file"
-        fi
+        install -m 0644 "$temp_dir/$file" "$INSTALL_DIR/$file"
     done
 
     if [[ ! -f "$INSTALL_DIR/.env" ]]; then
