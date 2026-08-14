@@ -28,7 +28,6 @@ tun-mtu @VPN_TUN_MTU@
 
 keepalive 10 60
 explicit-exit-notify 1
-persist-key
 persist-tun
 ifconfig-pool-persist /run/openvpn/ipp.txt
 status /run/openvpn/status.log 30
