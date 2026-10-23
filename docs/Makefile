@@ -65,8 +65,6 @@ add-client:
 	mkdir -p download-configs; \
 	docker-compose exec -T openvpn bash -c "export EASYRSA_CERT_EXPIRE=3650 && easyrsa build-client-full $${USERNAME} nopass"; \
 	docker-compose exec -T openvpn ovpn_getclient $${USERNAME} > download-configs/$${USERNAME}.ovpn; \
-        echo 'push "redirect-gateway def1"' >> openvpn-data/conf/client-configs/$${USERNAME}; \
-        echo "push \"dhcp-option DNS `echo ${OPENVPN_DNSSERVER} | sed 's/\"//g'`\"" >> openvpn-data/conf/client-configs/$${USERNAME}; \
 	echo ${README} > /tmp/README.md; \
 	zip -jqr download-configs/$${USERNAME}.zip download-configs/$${USERNAME}.ovpn /tmp/README.md; \
 	echo  -n "Send zip file with credentials to email? [y/N] " && read SEND_EMAIL; \
