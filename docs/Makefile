@@ -52,7 +52,7 @@ start:
 
 # Stop OpenVPN
 .PHONY: stop
-stop: 
+stop:
 	@cd ${OPENVPN_ROOTDIR}
 	@docker-compose down
 	@echo "OpenVPN stopped!"
@@ -63,16 +63,18 @@ add-client:
 	@read -p "Username: " USERNAME; \
 	cd ${OPENVPN_ROOTDIR}; \
 	mkdir -p download-configs; \
-	docker-compose run --rm openvpn bash -c "export EASYRSA_CERT_EXPIRE=3650 && easyrsa build-client-full $${USERNAME} nopass"; \
-	docker-compose run --rm openvpn ovpn_getclient $${USERNAME} > download-configs/$${USERNAME}.ovpn; \
+	docker-compose exec -T openvpn bash -c "export EASYRSA_CERT_EXPIRE=3650 && easyrsa build-client-full $${USERNAME} nopass"; \
+	docker-compose exec -T openvpn ovpn_getclient $${USERNAME} > download-configs/$${USERNAME}.ovpn; \
+        echo 'push "redirect-gateway def1"' >> openvpn-data/conf/client-configs/$${USERNAME}; \
+        echo "push \"dhcp-option DNS `echo ${OPENVPN_DNSSERVER} | sed 's/\"//g'`\"" >> openvpn-data/conf/client-configs/$${USERNAME}; \
 	echo ${README} > /tmp/README.md; \
 	zip -jqr download-configs/$${USERNAME}.zip download-configs/$${USERNAME}.ovpn /tmp/README.md; \
 	echo  -n "Send zip file with credentials to email? [y/N] " && read SEND_EMAIL; \
 	if [[ $$SEND_EMAIL =~ ^[Yy]$$ ]]; then \
 		read -p "Email address: " EMAIL; \
-		if [[ ! -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
+		if [[ -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
 		python3 send-email.py $${SMTP_HOST} $${SMTP_PORT} $${SMTP_USER} $${SMTP_PASSWORD} $${SMTP_TLS_ENABLED} $${USERNAME} $${EMAIL_FROM} $${EMAIL} 2> /dev/null; \
-		if [[ $? -eq 0 ]]; then \
+		if [[ $$? -eq 0 ]]; then \
 			echo "Email was sent successfully!" ;\
 		else \
 			echo "There was a problem sending the email, check your smtp settings." ;\
@@ -87,7 +89,7 @@ add-client:
 revoke-client:
 	@read -p "Username: " USERNAME; \
 	cd ${OPENVPN_ROOTDIR} ; \
-	docker-compose run --rm openvpn ovpn_revokeclient $${USERNAME}; \
+	docker-compose exec -T openvpn ovpn_revokeclient $${USERNAME}; \
 	echo "Client $${USERNAME} revoked with success!"
 
 # Remove client
@@ -95,23 +97,23 @@ revoke-client:
 remove-client:
 	@read -p "Username: " USERNAME; \
 	cd ${OPENVPN_ROOTDIR} ; \
-	docker-compose run --rm openvpn ovpn_revokeclient $${USERNAME} remove; \
+	docker-compose exec -T openvpn ovpn_revokeclient $${USERNAME} remove; \
 	echo "Client $${USERNAME} removed with success!"
 
 # List clients
 .PHONY: list-clients
 list-clients:
 	@cd ${OPENVPN_ROOTDIR} ; \
-	docker-compose run --rm openvpn ovpn_listclients
+	docker-compose exec -T openvpn ovpn_listclients
 
 # Send credentials
 .PHONY: send-credential
 send-credential:
 	@read -p "Username: " USERNAME; \
 	read -p "Email address: " EMAIL; \
-	if [[ ! -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
+	if [[ -f "send-email.py" ]]; then wget -q https://raw.githubusercontent.com/ganexcloud/docker-openvpn/master/tools/send-email.py; fi; \
 	python3 send-email.py $${SMTP_HOST} $${SMTP_PORT} $${SMTP_USER} $${SMTP_PASSWORD} $${SMTP_TLS_ENABLED} $${USERNAME} $${EMAIL_FROM} $${EMAIL}; \
-	if [[ $? -eq 0 ]]; then \
+	if [[ $$? -eq 0 ]]; then \
 		echo "Email was sent successfully!" ;\
 	else \
 		echo "There was a problem sending the email, check your smtp settings." ;\
